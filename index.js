@@ -3,7 +3,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const sequelize = require('./db');
 const Question = require('./models/Question');
-
+const User = require('./models/User')
 app.use(express.json());
 
 //testing database connection
@@ -43,6 +43,27 @@ app.get('/api/questions', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// creates a new user
+app.post('/api/users', async (req, res) => {
+  try {
+    const user = await User.create(req.body);
+    res.status(201).json(user);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// gets all users
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await User.findAll();
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
