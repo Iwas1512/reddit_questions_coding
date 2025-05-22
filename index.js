@@ -2,9 +2,13 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const sequelize = require('./db');
-const Question = require('./models/Question');
-const User = require('./models/User')
+
+
 app.use(express.json());
+
+//pull models from associations before inserting into their own vars
+const models = require('./associations/associations.js');
+const { User, Question, Tag, McqOption, FillBlankAnswer, Comment, QuestionVote } = models;
 
 //testing database connection
 sequelize.authenticate()
