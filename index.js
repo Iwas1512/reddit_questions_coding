@@ -8,7 +8,7 @@ app.use(express.json());
 
 //pull models from associations before inserting into their own vars
 const models = require('./associations/associations.js');
-const { User, Question, Tag, McqOption, FillBlankAnswer, Comment, QuestionVote } = models;
+const { User, Question, Tag, McqOption, FillBlankAnswer, Comment } = models;
 
 //testing database connection
 sequelize.authenticate()
@@ -23,10 +23,12 @@ sequelize.authenticate()
   .catch(err => {
     console.error('Unable to connect to the database:', err);
   });
+
 app.use(cors({
-  origin: 'https://community-coding-prep-frontend.vercel.app', // frontend URL
+  origin: 'https://community-coding-prep-frontend.vercel.app',
   credentials: true
 }));
+
 app.get('/', (req, res) => {
   res.send('Reddit Questions API is running');
 });
@@ -71,7 +73,6 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
