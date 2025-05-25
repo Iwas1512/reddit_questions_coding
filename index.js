@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const sequelize = require('./db');
-
+const cors = require('cors');
 
 app.use(express.json());
 
@@ -23,7 +23,10 @@ sequelize.authenticate()
   .catch(err => {
     console.error('Unable to connect to the database:', err);
   });
-
+app.use(cors({
+  origin: 'http://localhost:3000', // frontend URL
+  credentials: true
+}));
 app.get('/', (req, res) => {
   res.send('Reddit Questions API is running');
 });
