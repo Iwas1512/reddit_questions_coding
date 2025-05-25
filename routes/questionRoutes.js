@@ -2,12 +2,50 @@ const express = require('express');
 const router = express.Router();
 const { Question, User, McqOption, FillBlankAnswer, UserAnswer } = require('../associations/associations.js');
 
-// Create a new question
+// Create a new question with options/answers
 router.post('/', async (req, res) => {
+  const transaction = await Question.sequelize.transaction();
+  
   try {
-    const question = await Question.create(req.body);
+    const { mcqOptions, fillBlankAnswers, ...questionData } = req.body;
+    
+    // Create the question first
+    const question = await Question.create(questionData, { transaction });
+    
+    // Handle MCQ options if provided
+    if (questionData.question_type === 'mcq' && mcqOptions && mcqOptions.length > 0) {
+      const createdOptions = [];
+      for (let i = 0; i < mcqOptions.length; i++) {
+        const option = await McqOption.create({
+          question_id: question.question_id,
+          option_text: mcqOptions[i].option_text,
+          is_correct: mcqOptions[i].is_correct || false,
+          option_order: i + 1
+        }, { transaction });
+        createdOptions.push(option);
+      }
+      question.dataValues.mcqOptions = createdOptions;
+    }
+    
+    // Handle fill-in-blank answers if provided
+    if (questionData.question_type === 'fill_in_blank' && fillBlankAnswers && fillBlankAnswers.length > 0) {
+      const createdAnswers = [];
+      for (const answerData of fillBlankAnswers) {
+        const answer = await FillBlankAnswer.create({
+          question_id: question.question_id,
+          correct_answer: answerData.correct_answer,
+          is_case_sensitive: answerData.is_case_sensitive || false,
+          accepts_partial_match: answerData.accepts_partial_match || false
+        }, { transaction });
+        createdAnswers.push(answer);
+      }
+      question.dataValues.fillBlankAnswers = createdAnswers;
+    }
+    
+    await transaction.commit();
     res.status(201).json(question);
   } catch (error) {
+    await transaction.rollback();
     res.status(400).json({ error: error.message });
   }
 });
@@ -57,7 +95,8 @@ router.get('/:id', async (req, res) => {
         },
         {
           model: McqOption,
-          as: 'mcqOptions'
+          as: 'mcqOptions',
+          order: [['option_order', 'ASC']]
         },
         {
           model: FillBlankAnswer,
@@ -121,6 +160,7 @@ router.post('/:id/submit-answer', async (req, res) => {
 
     let isCorrect = false;
     let correctAnswer = null;
+    let explanation = question.explanation;
 
     if (question.question_type === 'mcq') {
       // For MCQ, check if submitted option ID is correct
@@ -138,15 +178,35 @@ router.post('/:id/submit-answer', async (req, res) => {
       });
       
       // Check if submitted answer matches any correct answer
-      isCorrect = correctAnswers.some(answer => {
-        if (answer.is_case_sensitive) {
-          return answer.correct_answer === submitted_answer;
+      for (const answer of correctAnswers) {
+        let match = false;
+        
+        if (answer.accepts_partial_match) {
+          // Partial match logic
+          if (answer.is_case_sensitive) {
+            match = answer.correct_answer.includes(submitted_answer) || 
+                   submitted_answer.includes(answer.correct_answer);
+          } else {
+            match = answer.correct_answer.toLowerCase().includes(submitted_answer.toLowerCase()) ||
+                   submitted_answer.toLowerCase().includes(answer.correct_answer.toLowerCase());
+          }
         } else {
-          return answer.correct_answer.toLowerCase() === submitted_answer.toLowerCase();
+          // Exact match logic
+          if (answer.is_case_sensitive) {
+            match = answer.correct_answer === submitted_answer;
+          } else {
+            match = answer.correct_answer.toLowerCase() === submitted_answer.toLowerCase();
+          }
         }
-      });
+        
+        if (match) {
+          isCorrect = true;
+          break;
+        }
+      }
       
-      correctAnswer = correctAnswers.length > 0 ? correctAnswers[0].correct_answer : null;
+      // Get all correct answers for display
+      correctAnswer = correctAnswers.map(a => a.correct_answer).join(' OR ');
     }
 
     // Save user's answer
@@ -160,7 +220,7 @@ router.post('/:id/submit-answer', async (req, res) => {
 
     res.json({
       correct: isCorrect,
-      explanation: question.explanation,
+      explanation: explanation,
       correct_answer: correctAnswer,
       user_answer: userAnswer
     });
