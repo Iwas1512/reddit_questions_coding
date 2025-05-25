@@ -7,7 +7,7 @@ const sequelize = require('./db');
 app.use(express.json());
 
 //pull models from associations before inserting into their own vars
-const models = require('./associations/associations.js');
+const models = require('associations/associations.js');
 const { User, Question, Tag, McqOption, FillBlankAnswer, Comment, QuestionVote } = models;
 
 //testing database connection
