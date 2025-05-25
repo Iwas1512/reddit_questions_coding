@@ -24,7 +24,7 @@ sequelize.authenticate()
     console.error('Unable to connect to the database:', err);
   });
 app.use(cors({
-  origin: 'https://community-coding-prep-frontend.vercel.app/', // frontend URL
+  origin: 'https://community-coding-prep-frontend.vercel.app', // frontend URL
   credentials: true
 }));
 app.get('/', (req, res) => {
