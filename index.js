@@ -25,10 +25,15 @@ sequelize.authenticate()
   });
 
 app.use(cors({
-  origin: 'https://community-coding-prep-frontend.vercel.app',
-  credentials: true
+  origin: [
+    'https://community-coding-prep-frontend.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
 app.get('/', (req, res) => {
   res.send('Reddit Questions API is running');
 });
