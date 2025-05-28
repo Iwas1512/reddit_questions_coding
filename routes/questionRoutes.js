@@ -9,6 +9,18 @@ router.post('/', async (req, res) => {
   try {
     const { mcqOptions, fillBlankAnswers, ...questionData } = req.body;
     
+    console.log('Creating question with data:', questionData);
+    
+    // Verify the author exists before creating the question
+    if (questionData.author_id) {
+      const author = await User.findByPk(questionData.author_id);
+      if (!author) {
+        await transaction.rollback();
+        return res.status(400).json({ error: `Author with ID ${questionData.author_id} does not exist` });
+      }
+      console.log('Author verified:', author.username);
+    }
+    
     // Create the question first
     const question = await Question.create(questionData, { transaction });
     
