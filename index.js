@@ -8,7 +8,9 @@ const cors = require('cors');
 const userRoutes = require('./routes/userRoutes');
 const questionRoutes = require('./routes/questionRoutes');
 const mcqOptionRoutes = require('./routes/mcqOptionRoutes');
-const fillBlankAnswerRoutes = require('./routes/fillBlankAnswerRoutes'); 
+const fillBlankAnswerRoutes = require('./routes/fillBlankAnswerRoutes');
+const commentRoutes = require('./routes/commentRoutes');
+const questionVoteRoutes = require('./routes/questionVoteRoutes');
 
 // Middleware
 app.use(express.json());
@@ -48,6 +50,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/questions', mcqOptionRoutes);
 app.use('/api/questions', fillBlankAnswerRoutes);
+app.use('/api/comments', commentRoutes);
+app.use('/api/questions', questionVoteRoutes);
+
 // Start server (MUST be at the end)
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
