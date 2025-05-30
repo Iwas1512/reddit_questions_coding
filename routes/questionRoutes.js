@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Question, User, McqOption, FillBlankAnswer, UserAnswer } = require('../associations/associations.js');
+const { Question, User, McqOption, FillBlankAnswer, UserAnswer, Tag } = require('../associations/associations.js');
 
 // Create a new question with options/answers
 router.post('/', async (req, res) => {
@@ -78,6 +78,12 @@ router.get('/', async (req, res) => {
           model: User,
           as: 'author',
           attributes: ['user_id', 'username', 'first_name', 'last_name']
+        },
+        {
+          model: Tag,
+          as: 'tags',
+          attributes: ['tag_id', 'tag_name', 'color_code'],
+          through: { attributes: [] }
         }
       ]
     });
@@ -113,6 +119,12 @@ router.get('/:id', async (req, res) => {
         {
           model: FillBlankAnswer,
           as: 'fillBlankAnswers'
+        },
+        {
+          model: Tag,
+          as: 'tags',
+          attributes: ['tag_id', 'tag_name', 'color_code'],
+          through: { attributes: [] }
         }
       ]
     });
@@ -145,6 +157,12 @@ router.get('/:id/complete', async (req, res) => {
         {
           model: FillBlankAnswer,
           as: 'fillBlankAnswers'
+        },
+        {
+          model: Tag,
+          as: 'tags',
+          attributes: ['tag_id', 'tag_name', 'color_code'],
+          through: { attributes: [] }
         }
       ]
     });
