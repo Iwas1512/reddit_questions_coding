@@ -17,14 +17,14 @@ router.post('/:questionId/vote', async (req, res) => {
     }
 
     // Check if question exists
-    const question = await Question.findByPk(questionId);
+    const question = await Question.findByPk(questionId, { transaction });
     if (!question) {
       await transaction.rollback();
       return res.status(404).json({ error: 'Question not found' });
     }
 
     // Check if user exists
-    const user = await User.findByPk(userId);
+    const user = await User.findByPk(userId, { transaction });
     if (!user) {
       await transaction.rollback();
       return res.status(404).json({ error: 'User not found' });
@@ -35,7 +35,8 @@ router.post('/:questionId/vote', async (req, res) => {
       where: {
         question_id: questionId,
         user_id: userId
-      }
+      },
+      transaction
     });
 
     if (existingVote) {
