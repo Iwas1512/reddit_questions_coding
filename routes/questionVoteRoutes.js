@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Question, QuestionVote, User } = require('../associations/associations.js');
+const { Question, QuestionVote, User, UserAnswer } = require('../associations/associations.js');
 
 // Vote on a question
 router.post('/:questionId/vote', async (req, res) => {
@@ -130,6 +130,59 @@ router.get('/:questionId/votes', async (req, res) => {
       question,
       userVote: question.votes[0]?.vote_type || null
     });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get user votes for all questions (bulk)
+router.get('/user/:userId/votes', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const userVotes = await QuestionVote.findAll({
+      where: { user_id: userId },
+      attributes: ['question_id', 'vote_type']
+    });
+
+    // Convert to a map for easy lookup
+    const votesMap = {};
+    userVotes.forEach(vote => {
+      votesMap[vote.question_id] = vote.vote_type;
+    });
+
+    res.json(votesMap);
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get user answers for all questions (bulk)
+router.get('/user/:userId/answers', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const userAnswers = await UserAnswer.findAll({
+      where: { user_id: userId },
+      attributes: ['question_id', 'is_correct', 'submitted_answer', 'created_at'],
+      order: [['created_at', 'DESC']]
+    });
+
+    // Convert to a map for easy lookup - only keep the latest answer per question
+    const answersMap = {};
+    userAnswers.forEach(answer => {
+      if (!answersMap[answer.question_id]) {
+        answersMap[answer.question_id] = {
+          is_correct: answer.is_correct,
+          submitted_answer: answer.submitted_answer,
+          answered_at: answer.created_at
+        };
+      }
+    });
+
+    res.json(answersMap);
 
   } catch (error) {
     res.status(500).json({ error: error.message });
