@@ -189,4 +189,32 @@ router.get('/user/:userId/answers', async (req, res) => {
   }
 });
 
+// Get user answer for a specific question
+router.get('/:questionId/user/:userId/answer', async (req, res) => {
+  try {
+    const { questionId, userId } = req.params;
+
+    const userAnswer = await UserAnswer.findOne({
+      where: { 
+        user_id: userId, 
+        question_id: questionId 
+      },
+      order: [['created_at', 'DESC']] // Get the latest answer
+    });
+
+    if (!userAnswer) {
+      return res.status(404).json({ error: 'User answer not found' });
+    }
+
+    res.json({
+      is_correct: userAnswer.is_correct,
+      submitted_answer: userAnswer.submitted_answer,
+      answered_at: userAnswer.created_at
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router; 
