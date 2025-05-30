@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Question, QuestionVote, User, UserAnswer } = require('../associations/associations.js');
+const { Question, QuestionVote, User, UserAnswer, McqOption } = require('../associations/associations.js');
 
 // Vote on a question
 router.post('/:questionId/vote', async (req, res) => {
@@ -206,9 +206,19 @@ router.get('/:questionId/user/:userId/answer', async (req, res) => {
       return res.status(404).json({ error: 'User answer not found' });
     }
 
+    // Get the question to determine the type
+    const question = await Question.findByPk(questionId);
+    let userAnswerText = userAnswer.submitted_answer; // Default to submitted answer
+
+    if (question && question.question_type === 'mcq') {
+      // For MCQ, convert option ID to option text
+      const selectedOption = await McqOption.findByPk(userAnswer.submitted_answer);
+      userAnswerText = selectedOption ? selectedOption.option_text : userAnswer.submitted_answer;
+    }
+
     res.json({
       is_correct: userAnswer.is_correct,
-      submitted_answer: userAnswer.submitted_answer,
+      submitted_answer: userAnswerText, // Return the text representation
       answered_at: userAnswer.created_at
     });
 

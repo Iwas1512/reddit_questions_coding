@@ -190,6 +190,7 @@ router.post('/:id/submit-answer', async (req, res) => {
 
     let isCorrect = false;
     let correctAnswer = null;
+    let userAnswerText = submitted_answer; // Default to the submitted answer
     let explanation = question.explanation;
 
     if (question.question_type === 'mcq') {
@@ -201,6 +202,7 @@ router.post('/:id/submit-answer', async (req, res) => {
       
       isCorrect = selectedOption && selectedOption.is_correct;
       correctAnswer = correctOption ? correctOption.option_text : null;
+      userAnswerText = selectedOption ? selectedOption.option_text : submitted_answer; // Use option text for display
     } else if (question.question_type === 'fill_in_blank') {
       // For fill-in-blank, check against stored answers
       const correctAnswers = await FillBlankAnswer.findAll({
@@ -237,9 +239,10 @@ router.post('/:id/submit-answer', async (req, res) => {
       
       // Get all correct answers for display
       correctAnswer = correctAnswers.map(a => a.correct_answer).join(' OR ');
+      userAnswerText = submitted_answer; // For fill-in-blank, use the text as-is
     }
 
-    // Save user's answer
+    // Save user's answer (still save the original submitted_answer for MCQ option IDs)
     const userAnswer = await UserAnswer.create({
       user_id,
       question_id: questionId,
@@ -252,7 +255,7 @@ router.post('/:id/submit-answer', async (req, res) => {
       correct: isCorrect,
       explanation: explanation,
       correct_answer: correctAnswer,
-      user_answer: userAnswer
+      user_answer: userAnswerText // Return the text representation, not the object
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
