@@ -267,8 +267,10 @@ router.post('/:id/submit-answer', async (req, res) => {
 
     // Award reputation points for correct answers (only if first correct answer)
     if (isCorrect && !existingAnswer) {
+      console.log(`Awarding reputation for user ${user_id}, question ${questionId}, isCorrect: ${isCorrect}, existingAnswer: ${existingAnswer}`);
       try {
         const reputationResult = await ReputationService.awardQuestionAnswered(user_id, questionId);
+        console.log('Reputation awarded successfully:', reputationResult);
         
         res.json({
           correct: isCorrect,
@@ -292,6 +294,7 @@ router.post('/:id/submit-answer', async (req, res) => {
         });
       }
     } else {
+      console.log(`NOT awarding reputation: isCorrect=${isCorrect}, existingAnswer=${!!existingAnswer}, user_id=${user_id}, question_id=${questionId}`);
       res.json({
         correct: isCorrect,
         explanation: explanation,

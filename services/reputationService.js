@@ -7,16 +7,19 @@ const VOUCHER_MILESTONE = 20;
 
 class ReputationService {
   static async addReputationPoints(userId, points, reason, referenceId = null, referenceType = null) {
+    console.log(`addReputationPoints called: userId=${userId}, points=${points}, reason=${reason}, referenceId=${referenceId}, referenceType=${referenceType}`);
     const transaction = await sequelize.transaction();
     
     try {
       const user = await User.findByPk(userId, { transaction });
       if (!user) {
+        console.log('User not found with ID:', userId);
         throw new Error('User not found');
       }
 
       const oldReputation = user.reputation_score;
       const newReputation = oldReputation + points;
+      console.log(`Updating reputation: ${oldReputation} -> ${newReputation}`);
       
       await user.update({ reputation_score: newReputation }, { transaction });
 
@@ -30,9 +33,11 @@ class ReputationService {
 
       const oldVoucherCount = Math.floor(oldReputation / VOUCHER_MILESTONE);
       const newVoucherCount = Math.floor(newReputation / VOUCHER_MILESTONE);
+      console.log(`Voucher calculation: oldCount=${oldVoucherCount}, newCount=${newVoucherCount}`);
       
       if (newVoucherCount > oldVoucherCount) {
         const vouchersToAdd = newVoucherCount - oldVoucherCount;
+        console.log(`Adding ${vouchersToAdd} vouchers to user`);
         await user.update({ 
           question_vouchers: user.question_vouchers + vouchersToAdd 
         }, { transaction });
@@ -47,6 +52,7 @@ class ReputationService {
       }
 
       await transaction.commit();
+      console.log('Transaction committed successfully');
       
       return {
         newReputation,
@@ -54,19 +60,23 @@ class ReputationService {
         currentVouchers: user.question_vouchers + (newVoucherCount - oldVoucherCount)
       };
     } catch (error) {
+      console.error('Error in addReputationPoints:', error);
       await transaction.rollback();
       throw error;
     }
   }
 
   static async awardQuestionAnswered(userId, questionId) {
-    return await this.addReputationPoints(
+    console.log(`ReputationService.awardQuestionAnswered called with userId: ${userId}, questionId: ${questionId}`);
+    const result = await this.addReputationPoints(
       userId, 
       1, 
       'question_answered', 
       questionId, 
       'question'
     );
+    console.log('ReputationService.awardQuestionAnswered result:', result);
+    return result;
   }
 
   static async awardQuestionUpvoted(userId, questionId) {
