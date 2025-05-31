@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
 const { User } = require('../associations/associations.js');
+const ReputationService = require('../services/reputationService');
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -165,7 +166,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get a single user by ID
+// Get a single user by ID with reputation info
 router.get('/:id', async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
@@ -176,7 +177,17 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(user);
+    // Get reputation details
+    try {
+      const reputationInfo = await ReputationService.getUserReputation(req.params.id);
+      res.json({
+        ...user.toJSON(),
+        reputation_details: reputationInfo
+      });
+    } catch (reputationError) {
+      // If reputation service fails, still return user data
+      res.json(user);
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Question, User, McqOption, FillBlankAnswer, UserAnswer, Tag } = require('../associations/associations.js');
+const ReputationService = require('../services/reputationService');
 
 // Create a new question with options/answers
 router.post('/', async (req, res) => {
@@ -19,10 +20,25 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: `Author with ID ${questionData.author_id} does not exist` });
       }
       console.log('Author verified:', author.username);
+      
+      // Check if user has question vouchers available
+      if (author.question_vouchers <= 0) {
+        await transaction.rollback();
+        return res.status(403).json({ 
+          error: 'No question vouchers available. Answer more questions or get upvotes to earn vouchers!',
+          current_vouchers: author.question_vouchers,
+          reputation_score: author.reputation_score
+        });
+      }
     }
     
     // Create the question first
     const question = await Question.create(questionData, { transaction });
+    
+    // Deduct a question voucher if author exists
+    if (questionData.author_id) {
+      await ReputationService.useQuestionVoucher(questionData.author_id);
+    }
     
     // Handle MCQ options if provided
     if (questionData.question_type === 'mcq' && mcqOptions && mcqOptions.length > 0) {
@@ -188,13 +204,17 @@ router.post('/:id/submit-answer', async (req, res) => {
       return res.status(404).json({ error: 'Question not found' });
     }
 
+    // Check if user has already answered this question correctly
+    const existingAnswer = await UserAnswer.findOne({
+      where: { user_id, question_id: questionId, is_correct: true }
+    });
+
     let isCorrect = false;
     let correctAnswer = null;
-    let userAnswerText = submitted_answer; // Default to the submitted answer
+    let userAnswerText = submitted_answer;
     let explanation = question.explanation;
 
     if (question.question_type === 'mcq') {
-      // For MCQ, check if submitted option ID is correct
       const selectedOption = await McqOption.findByPk(submitted_answer);
       const correctOption = await McqOption.findOne({
         where: { question_id: questionId, is_correct: true }
@@ -202,19 +222,16 @@ router.post('/:id/submit-answer', async (req, res) => {
       
       isCorrect = selectedOption && selectedOption.is_correct;
       correctAnswer = correctOption ? correctOption.option_text : null;
-      userAnswerText = selectedOption ? selectedOption.option_text : submitted_answer; // Use option text for display
+      userAnswerText = selectedOption ? selectedOption.option_text : submitted_answer;
     } else if (question.question_type === 'fill_in_blank') {
-      // For fill-in-blank, check against stored answers
       const correctAnswers = await FillBlankAnswer.findAll({
         where: { question_id: questionId }
       });
       
-      // Check if submitted answer matches any correct answer
       for (const answer of correctAnswers) {
         let match = false;
         
         if (answer.accepts_partial_match) {
-          // Partial match logic
           if (answer.is_case_sensitive) {
             match = answer.correct_answer.includes(submitted_answer) || 
                    submitted_answer.includes(answer.correct_answer);
@@ -223,7 +240,6 @@ router.post('/:id/submit-answer', async (req, res) => {
                    submitted_answer.toLowerCase().includes(answer.correct_answer.toLowerCase());
           }
         } else {
-          // Exact match logic
           if (answer.is_case_sensitive) {
             match = answer.correct_answer === submitted_answer;
           } else {
@@ -237,12 +253,10 @@ router.post('/:id/submit-answer', async (req, res) => {
         }
       }
       
-      // Get all correct answers for display
       correctAnswer = correctAnswers.map(a => a.correct_answer).join(' OR ');
-      userAnswerText = submitted_answer; // For fill-in-blank, use the text as-is
+      userAnswerText = submitted_answer;
     }
 
-    // Save user's answer (still save the original submitted_answer for MCQ option IDs)
     const userAnswer = await UserAnswer.create({
       user_id,
       question_id: questionId,
@@ -251,12 +265,40 @@ router.post('/:id/submit-answer', async (req, res) => {
       time_taken
     });
 
-    res.json({
-      correct: isCorrect,
-      explanation: explanation,
-      correct_answer: correctAnswer,
-      user_answer: userAnswerText // Return the text representation, not the object
-    });
+    // Award reputation points for correct answers (only if first correct answer)
+    if (isCorrect && !existingAnswer) {
+      try {
+        const reputationResult = await ReputationService.awardQuestionAnswered(user_id, questionId);
+        
+        res.json({
+          correct: isCorrect,
+          explanation: explanation,
+          correct_answer: correctAnswer,
+          user_answer: userAnswerText,
+          reputation_earned: {
+            points: 1,
+            new_reputation: reputationResult.newReputation,
+            vouchers_earned: reputationResult.vouchersEarned,
+            current_vouchers: reputationResult.currentVouchers
+          }
+        });
+      } catch (reputationError) {
+        console.error('Failed to award reputation:', reputationError);
+        res.json({
+          correct: isCorrect,
+          explanation: explanation,
+          correct_answer: correctAnswer,
+          user_answer: userAnswerText
+        });
+      }
+    } else {
+      res.json({
+        correct: isCorrect,
+        explanation: explanation,
+        correct_answer: correctAnswer,
+        user_answer: userAnswerText
+      });
+    }
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

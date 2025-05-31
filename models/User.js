@@ -37,6 +37,10 @@ const User = sequelize.define('User', {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
+  question_vouchers: {
+    type: DataTypes.INTEGER,
+    defaultValue: 3
+  },
   is_active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true

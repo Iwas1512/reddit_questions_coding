@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Question, QuestionVote, User, UserAnswer, McqOption } = require('../associations/associations.js');
+const ReputationService = require('../services/reputationService');
 
 // Vote on a question
 router.post('/:questionId/vote', async (req, res) => {
@@ -39,6 +40,8 @@ router.post('/:questionId/vote', async (req, res) => {
       transaction
     });
 
+    let reputationChange = null;
+
     if (existingVote) {
       // If same vote type, remove the vote
       if (existingVote.vote_type === voteType) {
@@ -47,11 +50,26 @@ router.post('/:questionId/vote', async (req, res) => {
         // Update question vote counts
         if (voteType === 'upvote') {
           question.upvote_count = Math.max(0, question.upvote_count - 1);
+          // Remove reputation point from question author when upvote is removed
+          if (question.author_id) {
+            try {
+              await ReputationService.addReputationPoints(
+                question.author_id, 
+                -1, 
+                'question_upvoted', 
+                questionId, 
+                'question'
+              );
+            } catch (error) {
+              console.error('Failed to remove reputation for upvote removal:', error);
+            }
+          }
         } else {
           question.downvote_count = Math.max(0, question.downvote_count - 1);
         }
       } else {
         // If different vote type, update the vote
+        const oldVoteType = existingVote.vote_type;
         existingVote.vote_type = voteType;
         await existingVote.save({ transaction });
         
@@ -59,9 +77,31 @@ router.post('/:questionId/vote', async (req, res) => {
         if (voteType === 'upvote') {
           question.upvote_count += 1;
           question.downvote_count = Math.max(0, question.downvote_count - 1);
+          // Award reputation for new upvote
+          if (question.author_id) {
+            try {
+              reputationChange = await ReputationService.awardQuestionUpvoted(question.author_id, questionId);
+            } catch (error) {
+              console.error('Failed to award reputation for upvote:', error);
+            }
+          }
         } else {
           question.downvote_count += 1;
           question.upvote_count = Math.max(0, question.upvote_count - 1);
+          // Remove reputation point when changing from upvote to downvote
+          if (question.author_id && oldVoteType === 'upvote') {
+            try {
+              await ReputationService.addReputationPoints(
+                question.author_id, 
+                -1, 
+                'question_upvoted', 
+                questionId, 
+                'question'
+              );
+            } catch (error) {
+              console.error('Failed to remove reputation for upvote change:', error);
+            }
+          }
         }
       }
     } else {
@@ -75,6 +115,14 @@ router.post('/:questionId/vote', async (req, res) => {
       // Update question vote counts
       if (voteType === 'upvote') {
         question.upvote_count += 1;
+        // Award reputation for new upvote
+        if (question.author_id) {
+          try {
+            reputationChange = await ReputationService.awardQuestionUpvoted(question.author_id, questionId);
+          } catch (error) {
+            console.error('Failed to award reputation for upvote:', error);
+          }
+        }
       } else {
         question.downvote_count += 1;
       }
@@ -95,10 +143,22 @@ router.post('/:questionId/vote', async (req, res) => {
       ]
     });
 
-    res.json({
+    const response = {
       question: updatedQuestion,
       userVote: updatedQuestion.votes[0]?.vote_type || null
-    });
+    };
+
+    // Include reputation change info if applicable
+    if (reputationChange) {
+      response.reputation_awarded = {
+        points: 1,
+        new_reputation: reputationChange.newReputation,
+        vouchers_earned: reputationChange.vouchersEarned,
+        current_vouchers: reputationChange.currentVouchers
+      };
+    }
+
+    res.json(response);
 
   } catch (error) {
     await transaction.rollback();

@@ -9,6 +9,7 @@ const UserAnswer = require('../models/UserAnswer');
 const QuestionReport = require('../models/QuestionReport');
 const CommentVote = require('../models/CommentVote');
 const QuestionVote = require('../models/QuestionVote');
+const ReputationHistory = require('../models/ReputationHistory');
 
 //model associations
 User.hasMany(Question, { foreignKey: 'author_id', as: 'questions' });
@@ -17,6 +18,7 @@ User.hasMany(UserAnswer, { foreignKey: 'user_id' });
 User.hasMany(QuestionReport, { foreignKey: 'reporter_id', as: 'reports' });
 User.hasMany(CommentVote, { foreignKey: 'user_id', as: 'commentVotes' });
 User.hasMany(QuestionVote, { foreignKey: 'user_id', as: 'questionVotes' });
+User.hasMany(ReputationHistory, { foreignKey: 'user_id', as: 'reputationHistory' });
 
 Question.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
 Question.hasMany(McqOption, { foreignKey: 'question_id', as: 'mcqOptions' });
@@ -62,6 +64,8 @@ CommentVote.belongsTo(Comment, { foreignKey: 'comment_id' });
 QuestionVote.belongsTo(User, { foreignKey: 'user_id' });
 QuestionVote.belongsTo(Question, { foreignKey: 'question_id' });
 
+ReputationHistory.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 module.exports = {
   User,
   Tag,
@@ -73,5 +77,6 @@ module.exports = {
   UserAnswer,
   QuestionReport,
   CommentVote,
-  QuestionVote
+  QuestionVote,
+  ReputationHistory
 };
