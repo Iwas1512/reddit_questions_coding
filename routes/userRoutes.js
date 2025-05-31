@@ -133,7 +133,17 @@ router.get('/me', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(user);
+    // Get reputation details
+    try {
+      const reputationInfo = await ReputationService.getUserReputation(req.user.userId);
+      res.json({
+        ...user.toJSON(),
+        reputation_details: reputationInfo
+      });
+    } catch (reputationError) {
+      // If reputation service fails, still return user data
+      res.json(user);
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
