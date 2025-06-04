@@ -65,6 +65,14 @@ const Question = sequelize.define('Question', {
   is_active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  code: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  language: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
   tableName: 'questions',
