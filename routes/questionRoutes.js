@@ -149,9 +149,6 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Question not found' });
     }
 
-    // Increment view count
-    await question.increment('view_count');
-
     res.json(question);
   } catch (error) {
     res.status(500).json({ error: error.message });
