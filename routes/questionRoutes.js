@@ -149,6 +149,9 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Question not found' });
     }
 
+    // Increment view count
+    await question.increment('view_count');
+
     res.json(question);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -344,6 +347,27 @@ router.delete('/', async (req, res) => {
       truncate: true
     });
     res.json({ message: `All questions deleted. Count: ${deletedCount}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Increment view count for a question (separate endpoint for when expanding in feed)
+router.post('/:id/view', async (req, res) => {
+  try {
+    const question = await Question.findByPk(req.params.id);
+    
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    // Increment view count
+    await question.increment('view_count');
+    
+    res.json({ 
+      success: true, 
+      view_count: question.view_count + 1 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
