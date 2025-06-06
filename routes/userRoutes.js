@@ -154,6 +154,65 @@ router.post('/logout', (req, res) => {
   res.json({ message: 'Logout successful' });
 });
 
+// OAuth sign-in (creates user if doesn't exist)
+router.post('/oauth-signin', async (req, res) => {
+  try {
+    const { email, username, first_name, last_name, provider, provider_id } = req.body;
+
+    if (!email || !provider) {
+      return res.status(400).json({ error: 'Email and provider are required' });
+    }
+
+    // Check if user already exists by email
+    let user = await User.findOne({ where: { email } });
+
+    if (!user) {
+      // Generate a unique username if the provided one already exists
+      let uniqueUsername = username || email.split('@')[0];
+      let usernameExists = await User.findOne({ where: { username: uniqueUsername } });
+      let counter = 1;
+      
+      while (usernameExists) {
+        uniqueUsername = `${username || email.split('@')[0]}_${counter}`;
+        usernameExists = await User.findOne({ where: { username: uniqueUsername } });
+        counter++;
+      }
+
+      // Create new user for OAuth
+      user = await User.create({
+        username: uniqueUsername,
+        email,
+        password_hash: 'oauth_user', // OAuth users don't have passwords
+        first_name: first_name || '',
+        last_name: last_name || '',
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: user.user_id, 
+        username: user.username,
+        email: user.email 
+      },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    // Return user data without password
+    const { password_hash: _, ...userWithoutPassword } = user.toJSON();
+    
+    res.json({
+      message: 'OAuth sign-in successful',
+      user: userWithoutPassword,
+      token
+    });
+  } catch (error) {
+    console.error('OAuth sign-in error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Create a new user
 router.post('/', async (req, res) => {
   try {
