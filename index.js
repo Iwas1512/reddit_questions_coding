@@ -21,12 +21,15 @@ app.use(express.json());
 app.use(cors({
   origin: [
     'https://community-coding-prep-frontend.vercel.app',
+    'https://community-coding-prep-frontend.vercel.app/',
     'http://localhost:3000',
     'http://localhost:3001'
   ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
 
 // Database connection
