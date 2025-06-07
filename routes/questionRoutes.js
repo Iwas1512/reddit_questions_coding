@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { Question, User, McqOption, FillBlankAnswer, UserAnswer, Tag } = require('../associations/associations.js');
+const { Question, User, McqOption, FillBlankAnswer, UserAnswer, Tag, sequelize } = require('../associations/associations.js');
 const ReputationService = require('../services/reputationService');
+const { Op } = require('sequelize');
 
 // Create a new question with options/answers
 router.post('/', async (req, res) => {
@@ -84,24 +85,45 @@ router.get('/', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
+    
+    const tagFilter = req.query.tag;
+    const verifiedOnly = req.query.verified === 'true';
+    
+    let whereClause = {};
+    let includeClause = [
+      {
+        model: User,
+        as: 'author',
+        attributes: ['user_id', 'username', 'first_name', 'last_name']
+      },
+      {
+        model: Tag,
+        as: 'tags',
+        attributes: ['tag_id', 'tag_name', 'color_code'],
+        through: { attributes: [] }
+      }
+    ];
+
+    if (verifiedOnly) {
+      whereClause.is_verified = true;
+    }
+
+    if (tagFilter) {
+      includeClause[1].where = {
+        tag_name: {
+          [Op.iLike]: `%${tagFilter}%`
+        }
+      };
+      includeClause[1].required = true;
+    }
 
     const { count, rows: questions } = await Question.findAndCountAll({
+      where: whereClause,
       limit,
       offset,
       order: [['created_at', 'DESC']],
-      include: [
-        {
-          model: User,
-          as: 'author',
-          attributes: ['user_id', 'username', 'first_name', 'last_name']
-        },
-        {
-          model: Tag,
-          as: 'tags',
-          attributes: ['tag_id', 'tag_name', 'color_code'],
-          through: { attributes: [] }
-        }
-      ]
+      include: includeClause,
+      distinct: true
     });
 
     res.json({
