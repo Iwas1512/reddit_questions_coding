@@ -129,6 +129,15 @@ router.post('/:questionId/vote', async (req, res) => {
     }
 
     await question.save({ transaction });
+    
+    // Check for automatic verification based on net upvotes
+    const netUpvotes = question.upvote_count - question.downvote_count;
+    if (netUpvotes >= 10 && !question.is_verified) {
+      question.is_verified = true;
+      await question.save({ transaction });
+      console.log(`Question ${questionId} automatically verified with ${netUpvotes} net upvotes`);
+    }
+    
     await transaction.commit();
 
     // Get updated vote counts and user's vote status

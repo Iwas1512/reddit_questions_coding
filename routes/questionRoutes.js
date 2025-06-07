@@ -370,4 +370,76 @@ router.post('/:id/view', async (req, res) => {
   }
 });
 
+// Admin route: Manually verify a question
+router.post('/:id/verify', async (req, res) => {
+  try {
+    const { adminUserId } = req.body;
+    
+    // Check if the requesting user is an admin
+    const admin = await User.findByPk(adminUserId);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const question = await Question.findByPk(req.params.id);
+    
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    if (question.is_verified) {
+      return res.status(400).json({ error: 'Question is already verified' });
+    }
+
+    question.is_verified = true;
+    await question.save();
+    
+    console.log(`Question ${req.params.id} manually verified by admin ${adminUserId}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Question verified successfully',
+      question: question 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin route: Manually unverify a question
+router.post('/:id/unverify', async (req, res) => {
+  try {
+    const { adminUserId } = req.body;
+    
+    // Check if the requesting user is an admin
+    const admin = await User.findByPk(adminUserId);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const question = await Question.findByPk(req.params.id);
+    
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    if (!question.is_verified) {
+      return res.status(400).json({ error: 'Question is not verified' });
+    }
+
+    question.is_verified = false;
+    await question.save();
+    
+    console.log(`Question ${req.params.id} manually unverified by admin ${adminUserId}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Question unverified successfully',
+      question: question 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
