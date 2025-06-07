@@ -88,6 +88,7 @@ router.get('/', async (req, res) => {
     
     const tagFilter = req.query.tag;
     const verifiedOnly = req.query.verified === 'true';
+    const sortBy = req.query.sortBy || 'newest';
     
     let whereClause = {};
     let includeClause = [
@@ -120,11 +121,35 @@ router.get('/', async (req, res) => {
       }
     }
 
+    // Determine order based on sortBy parameter
+    let orderClause;
+    switch (sortBy) {
+      case 'popular':
+        // Sort by combination of upvotes and views (hot/popular)
+        orderClause = [
+          [sequelize.literal('(upvote_count + view_count)'), 'DESC'],
+          ['created_at', 'DESC']
+        ];
+        break;
+      case 'upvotes':
+        // Sort by upvotes (top)
+        orderClause = [
+          ['upvote_count', 'DESC'],
+          ['created_at', 'DESC']
+        ];
+        break;
+      case 'newest':
+      default:
+        // Sort by creation date (newest)
+        orderClause = [['created_at', 'DESC']];
+        break;
+    }
+
     const { count, rows: questions } = await Question.findAndCountAll({
       where: whereClause,
       limit,
       offset,
-      order: [['created_at', 'DESC']],
+      order: orderClause,
       include: includeClause,
       distinct: true
     });
