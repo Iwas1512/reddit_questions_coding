@@ -1,5 +1,6 @@
 const express = require('express');
 const { Op } = require('sequelize');
+const sequelize = require('../db');
 const router = express.Router();
 const { Tag, Question, QuestionTag, User } = require('../associations/associations');
 
@@ -62,10 +63,18 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Tag name is required' });
     }
     
-    // Check if tag already exists
-    const existingTag = await Tag.findOne({ where: { tag_name } });
+    // Check if tag already exists (case-insensitive)
+    const existingTag = await Tag.findOne({ 
+      where: sequelize.where(
+        sequelize.fn('LOWER', sequelize.col('tag_name')),
+        sequelize.fn('LOWER', tag_name)
+      )
+    });
     if (existingTag) {
-      return res.status(409).json({ error: 'Tag with this name already exists' });
+      return res.status(409).json({ 
+        error: 'Tag with this name already exists',
+        existing_tag: existingTag.tag_name 
+      });
     }
     
     const tag = await Tag.create({
@@ -91,16 +100,24 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Tag not found' });
     }
     
-    // Check if new tag name conflicts with existing tag (excluding current tag)
-    if (tag_name && tag_name !== tag.tag_name) {
+    // Check if new tag name conflicts with existing tag (excluding current tag, case-insensitive)
+    if (tag_name && tag_name.toLowerCase() !== tag.tag_name.toLowerCase()) {
       const existingTag = await Tag.findOne({ 
         where: { 
-          tag_name,
-          tag_id: { [Op.ne]: req.params.id }
+          [Op.and]: [
+            sequelize.where(
+              sequelize.fn('LOWER', sequelize.col('tag_name')),
+              sequelize.fn('LOWER', tag_name)
+            ),
+            { tag_id: { [Op.ne]: req.params.id } }
+          ]
         }
       });
       if (existingTag) {
-        return res.status(409).json({ error: 'Tag with this name already exists' });
+        return res.status(409).json({ 
+          error: 'Tag with this name already exists',
+          existing_tag: existingTag.tag_name 
+        });
       }
     }
     
@@ -237,7 +254,12 @@ router.post('/seed', async (req, res) => {
 
     const createdTags = [];
     for (const tagData of defaultTags) {
-      const existingTag = await Tag.findOne({ where: { tag_name: tagData.tag_name } });
+      const existingTag = await Tag.findOne({ 
+        where: sequelize.where(
+          sequelize.fn('LOWER', sequelize.col('tag_name')),
+          sequelize.fn('LOWER', tagData.tag_name)
+        )
+      });
       if (!existingTag) {
         const tag = await Tag.create(tagData);
         createdTags.push(tag);
