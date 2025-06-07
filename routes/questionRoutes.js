@@ -109,12 +109,15 @@ router.get('/', async (req, res) => {
     }
 
     if (tagFilter) {
-      includeClause[1].where = {
-        tag_name: {
-          [Op.iLike]: `%${tagFilter}%`
-        }
-      };
-      includeClause[1].required = true;
+      const tagNames = tagFilter.split(',').map(tag => tag.trim()).filter(tag => tag);
+      if (tagNames.length > 0) {
+        includeClause[1].where = {
+          tag_name: {
+            [Op.in]: tagNames
+          }
+        };
+        includeClause[1].required = true;
+      }
     }
 
     const { count, rows: questions } = await Question.findAndCountAll({
