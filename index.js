@@ -22,6 +22,8 @@ app.use(cors({
   origin: [
     'https://community-coding-prep-frontend.vercel.app',
     'https://community-coding-prep-frontend.vercel.app/',
+    'https://algozero.xyz',
+    'https://www.algozero.xyz',
     'http://localhost:3000',
     'http://localhost:3001'
   ],
