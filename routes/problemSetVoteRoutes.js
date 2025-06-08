@@ -87,10 +87,10 @@ router.post('/:problemsetId/vote', async (req, res) => {
         // Log reputation change
         await ReputationHistory.create({
           user_id: problemSet.author_id,
-          change_amount: reputationChange,
-          change_reason: `Problem set ${voteType}`,
-          related_id: problemsetId,
-          related_type: 'problemset_vote'
+          points_earned: reputationChange,
+          reason: 'question_upvoted', // Using existing enum - represents content upvoted
+          reference_id: problemsetId,
+          reference_type: 'question' // Using existing enum - will represent problemset
         }, { transaction });
         
         console.log('Updated author reputation:', { 
