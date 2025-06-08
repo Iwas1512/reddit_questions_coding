@@ -1,9 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const ProblemSetVote = require('../models/ProblemSetVote');
-const ProblemSet = require('../models/ProblemSet');
-const User = require('../models/User');
-const ReputationHistory = require('../models/ReputationHistory');
+const { ProblemSetVote, ProblemSet, User, ReputationHistory } = require('../associations/associations');
 const sequelize = require('../db');
 
 // Vote on a problem set
@@ -68,24 +65,40 @@ router.post('/:problemsetId/vote', async (req, res) => {
     
     // Update problem set vote counts
     if (voteType === 'upvote') {
-      await problemSet.increment('upvote_count', { 
-        by: Math.abs(voteChange),
-        transaction 
-      });
-      if (voteChange < 0) {
+      if (voteChange > 0) {
+        await problemSet.increment('upvote_count', { 
+          by: voteChange,
+          transaction 
+        });
+      } else if (voteChange < 0) {
         await problemSet.decrement('upvote_count', { 
           by: Math.abs(voteChange),
           transaction 
         });
       }
-    } else {
-      await problemSet.increment('downvote_count', { 
-        by: Math.abs(voteChange),
-        transaction 
-      });
-      if (voteChange > 0) {
+      // Handle vote type change (from downvote to upvote)
+      if (existingVote && existingVote.vote_type !== voteType && voteChange === 2) {
         await problemSet.decrement('downvote_count', { 
+          by: 1,
+          transaction 
+        });
+      }
+    } else {
+      if (voteChange < 0) {
+        await problemSet.increment('downvote_count', { 
           by: Math.abs(voteChange),
+          transaction 
+        });
+      } else if (voteChange > 0) {
+        await problemSet.decrement('downvote_count', { 
+          by: voteChange,
+          transaction 
+        });
+      }
+      // Handle vote type change (from upvote to downvote)
+      if (existingVote && existingVote.vote_type !== voteType && voteChange === -2) {
+        await problemSet.decrement('upvote_count', { 
+          by: 1,
           transaction 
         });
       }
@@ -129,7 +142,17 @@ router.post('/:problemsetId/vote', async (req, res) => {
   } catch (error) {
     await transaction.rollback();
     console.error('Error voting on problem set:', error);
-    res.status(500).json({ message: 'Failed to vote on problem set' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      problemsetId,
+      userId,
+      voteType
+    });
+    res.status(500).json({ 
+      message: 'Failed to vote on problem set',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
