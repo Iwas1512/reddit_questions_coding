@@ -14,10 +14,16 @@ const sequelize = require('../db');
 // Get all problem sets with pagination and filtering
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 10, tag, verified, sortBy = 'newest', search } = req.query;
+    const { page = 1, limit = 10, tag, verified, sortBy = 'newest', search, admin } = req.query;
     const offset = (page - 1) * limit;
     
-    let whereClause = { is_active: true };
+    let whereClause = {};
+    
+    // For admin view, show all problem sets including inactive ones
+    if (admin !== 'true') {
+      whereClause.is_active = true;
+    }
+    
     let orderClause = [];
     
     // Handle verified filter
@@ -382,6 +388,126 @@ router.post('/:id/view', async (req, res) => {
   } catch (error) {
     console.error('Error incrementing view count:', error);
     res.status(500).json({ message: 'Failed to increment view count' });
+  }
+});
+
+// Verify problem set (admin only)
+router.post('/:id/verify', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminUserId } = req.body;
+    
+    const problemSet = await ProblemSet.findByPk(id, {
+      include: [
+        { model: User, as: 'author', attributes: ['user_id', 'username'] }
+      ]
+    });
+    
+    if (!problemSet) {
+      return res.status(404).json({ message: 'Problem set not found' });
+    }
+    
+    if (problemSet.is_verified) {
+      return res.status(400).json({ message: 'Problem set is already verified' });
+    }
+    
+    // Update problem set to verified
+    await problemSet.update({ 
+      is_verified: true,
+      verified_by: adminUserId,
+      verified_at: new Date()
+    });
+    
+    // Give reputation point to the author
+    if (problemSet.author_id !== adminUserId) {
+      const author = await User.findByPk(problemSet.author_id);
+      if (author) {
+        await author.increment('reputation_score', { by: 1 });
+        
+        // Log reputation history
+        await ReputationHistory.create({
+          user_id: problemSet.author_id,
+          action: 'problem_set_verified',
+          points_earned: 1,
+          details: `Problem set "${problemSet.title}" was verified`,
+          related_id: problemSet.problemset_id,
+          related_type: 'problem_set'
+        });
+      }
+    }
+    
+    res.json({ 
+      message: 'Problem set verified successfully',
+      problemSet: await ProblemSet.findByPk(id, {
+        include: [
+          { model: User, as: 'author', attributes: ['user_id', 'username', 'first_name', 'last_name'] },
+          { model: Tag, as: 'tags', attributes: ['tag_id', 'tag_name', 'color_code'], through: { attributes: [] } }
+        ]
+      })
+    });
+  } catch (error) {
+    console.error('Error verifying problem set:', error);
+    res.status(500).json({ message: 'Failed to verify problem set' });
+  }
+});
+
+// Unverify problem set (admin only)
+router.post('/:id/unverify', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminUserId } = req.body;
+    
+    const problemSet = await ProblemSet.findByPk(id, {
+      include: [
+        { model: User, as: 'author', attributes: ['user_id', 'username'] }
+      ]
+    });
+    
+    if (!problemSet) {
+      return res.status(404).json({ message: 'Problem set not found' });
+    }
+    
+    if (!problemSet.is_verified) {
+      return res.status(400).json({ message: 'Problem set is not verified' });
+    }
+    
+    // Update problem set to unverified
+    await problemSet.update({ 
+      is_verified: false,
+      verified_by: null,
+      verified_at: null
+    });
+    
+    // Remove reputation point from the author (if they got one for this verification)
+    if (problemSet.author_id !== adminUserId) {
+      const author = await User.findByPk(problemSet.author_id);
+      if (author && author.reputation_score > 0) {
+        await author.decrement('reputation_score', { by: 1 });
+        
+        // Log reputation history
+        await ReputationHistory.create({
+          user_id: problemSet.author_id,
+          action: 'problem_set_unverified',
+          points_earned: -1,
+          details: `Problem set "${problemSet.title}" was unverified`,
+          related_id: problemSet.problemset_id,
+          related_type: 'problem_set'
+        });
+      }
+    }
+    
+    res.json({ 
+      message: 'Problem set unverified successfully',
+      problemSet: await ProblemSet.findByPk(id, {
+        include: [
+          { model: User, as: 'author', attributes: ['user_id', 'username', 'first_name', 'last_name'] },
+          { model: Tag, as: 'tags', attributes: ['tag_id', 'tag_name', 'color_code'], through: { attributes: [] } }
+        ]
+      })
+    });
+  } catch (error) {
+    console.error('Error unverifying problem set:', error);
+    res.status(500).json({ message: 'Failed to unverify problem set' });
   }
 });
 
