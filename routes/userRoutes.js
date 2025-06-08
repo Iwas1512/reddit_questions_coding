@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
 const { User } = require('../associations/associations.js');
 const ReputationService = require('../services/reputationService');
+const validator = require('validator');
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -28,6 +29,13 @@ const authenticateToken = (req, res, next) => {
 router.post('/register', async (req, res) => {
   try {
     const { username, email, password, first_name, last_name } = req.body;
+
+    // Validate email format
+    if (!email || !validator.isEmail(email)) {
+      return res.status(400).json({ 
+        error: 'Please provide a valid email address' 
+      });
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -163,6 +171,13 @@ router.post('/oauth-signin', async (req, res) => {
       return res.status(400).json({ error: 'Email and provider are required' });
     }
 
+    // Validate email format
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({ 
+        error: 'Please provide a valid email address' 
+      });
+    }
+
     // Check if user already exists by email
     let user = await User.findOne({ where: { email } });
 
@@ -216,6 +231,15 @@ router.post('/oauth-signin', async (req, res) => {
 // Create a new user
 router.post('/', async (req, res) => {
   try {
+    const { email } = req.body;
+    
+    // Validate email format if email is provided
+    if (email && !validator.isEmail(email)) {
+      return res.status(400).json({ 
+        error: 'Please provide a valid email address' 
+      });
+    }
+
     const user = await User.create(req.body);
     res.status(201).json(user);
   } catch (error) {
