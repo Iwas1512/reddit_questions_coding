@@ -11,46 +11,53 @@ router.post('/:problemsetId/vote', async (req, res) => {
     const { problemsetId } = req.params;
     const { userId, voteType } = req.body;
     
+    console.log('Processing vote:', { problemsetId, userId, voteType });
+    
     if (!['upvote', 'downvote'].includes(voteType)) {
+      await transaction.rollback();
       return res.status(400).json({ message: 'Invalid vote type' });
     }
     
     // Check if problem set exists
-    const problemSet = await ProblemSet.findByPk(problemsetId);
+    const problemSet = await ProblemSet.findByPk(problemsetId, { transaction });
     if (!problemSet) {
+      await transaction.rollback();
       return res.status(404).json({ message: 'Problem set not found' });
     }
     
     // Check if user exists
-    const user = await User.findByPk(userId);
+    const user = await User.findByPk(userId, { transaction });
     if (!user) {
+      await transaction.rollback();
       return res.status(404).json({ message: 'User not found' });
     }
     
     // Don't allow users to vote on their own problem sets
     if (problemSet.author_id === parseInt(userId)) {
+      await transaction.rollback();
       return res.status(400).json({ message: 'Cannot vote on your own problem set' });
     }
     
     // Check if user has already voted
     const existingVote = await ProblemSetVote.findOne({
-      where: { user_id: userId, problemset_id: problemsetId }
+      where: { user_id: userId, problemset_id: problemsetId },
+      transaction
     });
     
-    let voteChange = 0;
     let reputationChange = 0;
+    let userVote = null;
     
     if (existingVote) {
       if (existingVote.vote_type === voteType) {
-        // Remove the vote if same type
+        // Remove the vote if same type (toggle off)
         await existingVote.destroy({ transaction });
-        voteChange = voteType === 'upvote' ? -1 : 1;
         reputationChange = voteType === 'upvote' ? -1 : 1;
+        userVote = null;
       } else {
         // Change vote type
         await existingVote.update({ vote_type: voteType }, { transaction });
-        voteChange = voteType === 'upvote' ? 2 : -2;
         reputationChange = voteType === 'upvote' ? 2 : -2;
+        userVote = voteType;
       }
     } else {
       // Create new vote
@@ -59,54 +66,15 @@ router.post('/:problemsetId/vote', async (req, res) => {
         problemset_id: problemsetId,
         vote_type: voteType
       }, { transaction });
-      voteChange = voteType === 'upvote' ? 1 : -1;
       reputationChange = voteType === 'upvote' ? 1 : -1;
+      userVote = voteType;
     }
     
-    // Update problem set vote counts
-    if (voteType === 'upvote') {
-      if (voteChange > 0) {
-        await problemSet.increment('upvote_count', { 
-          by: voteChange,
-          transaction 
-        });
-      } else if (voteChange < 0) {
-        await problemSet.decrement('upvote_count', { 
-          by: Math.abs(voteChange),
-          transaction 
-        });
-      }
-      // Handle vote type change (from downvote to upvote)
-      if (existingVote && existingVote.vote_type !== voteType && voteChange === 2) {
-        await problemSet.decrement('downvote_count', { 
-          by: 1,
-          transaction 
-        });
-      }
-    } else {
-      if (voteChange < 0) {
-        await problemSet.increment('downvote_count', { 
-          by: Math.abs(voteChange),
-          transaction 
-        });
-      } else if (voteChange > 0) {
-        await problemSet.decrement('downvote_count', { 
-          by: voteChange,
-          transaction 
-        });
-      }
-      // Handle vote type change (from upvote to downvote)
-      if (existingVote && existingVote.vote_type !== voteType && voteChange === -2) {
-        await problemSet.decrement('upvote_count', { 
-          by: 1,
-          transaction 
-        });
-      }
-    }
+    console.log('Reputation change:', reputationChange);
     
     // Update author's reputation if there's a change
     if (reputationChange !== 0 && problemSet.author_id) {
-      const author = await User.findByPk(problemSet.author_id);
+      const author = await User.findByPk(problemSet.author_id, { transaction });
       if (author) {
         const newReputation = Math.max(0, author.reputation_score + reputationChange);
         const newVouchers = Math.floor(newReputation / 20);
@@ -124,19 +92,39 @@ router.post('/:problemsetId/vote', async (req, res) => {
           related_id: problemsetId,
           related_type: 'problemset_vote'
         }, { transaction });
+        
+        console.log('Updated author reputation:', { 
+          authorId: author.user_id, 
+          oldRep: author.reputation_score - reputationChange, 
+          newRep: newReputation 
+        });
       }
     }
     
     await transaction.commit();
     
-    // Fetch updated problem set
-    const updatedProblemSet = await ProblemSet.findByPk(problemsetId);
+    // Calculate vote counts directly from database
+    const upvoteCount = await ProblemSetVote.count({
+      where: { problemset_id: problemsetId, vote_type: 'upvote' }
+    });
+    
+    const downvoteCount = await ProblemSetVote.count({
+      where: { problemset_id: problemsetId, vote_type: 'downvote' }
+    });
+    
+    // Update problem set vote counts
+    await problemSet.update({
+      upvote_count: upvoteCount,
+      downvote_count: downvoteCount
+    });
+    
+    console.log('Vote counts updated:', { upvoteCount, downvoteCount });
     
     res.json({
       success: true,
-      upvote_count: updatedProblemSet.upvote_count,
-      downvote_count: updatedProblemSet.downvote_count,
-      user_vote: existingVote && existingVote.vote_type === voteType ? null : voteType
+      upvote_count: upvoteCount,
+      downvote_count: downvoteCount,
+      user_vote: userVote
     });
     
   } catch (error) {
@@ -145,9 +133,8 @@ router.post('/:problemsetId/vote', async (req, res) => {
     console.error('Error details:', {
       message: error.message,
       stack: error.stack,
-      problemsetId,
-      userId,
-      voteType
+      problemsetId: req.params.problemsetId,
+      body: req.body
     });
     res.status(500).json({ 
       message: 'Failed to vote on problem set',
