@@ -10,6 +10,10 @@ const QuestionReport = require('../models/QuestionReport');
 const CommentVote = require('../models/CommentVote');
 const QuestionVote = require('../models/QuestionVote');
 const ReputationHistory = require('../models/ReputationHistory');
+const ProblemSet = require('../models/ProblemSet');
+const ProblemSetQuestion = require('../models/ProblemSetQuestion');
+const ProblemSetVote = require('../models/ProblemSetVote');
+const ProblemSetTag = require('../models/ProblemSetTag');
 
 //model associations
 User.hasMany(Question, { foreignKey: 'author_id', as: 'questions' });
@@ -19,6 +23,8 @@ User.hasMany(QuestionReport, { foreignKey: 'reporter_id', as: 'reports' });
 User.hasMany(CommentVote, { foreignKey: 'user_id', as: 'commentVotes' });
 User.hasMany(QuestionVote, { foreignKey: 'user_id', as: 'questionVotes' });
 User.hasMany(ReputationHistory, { foreignKey: 'user_id', as: 'reputationHistory' });
+User.hasMany(ProblemSet, { foreignKey: 'author_id', as: 'problemSets' });
+User.hasMany(ProblemSetVote, { foreignKey: 'user_id', as: 'problemSetVotes' });
 
 Question.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
 Question.hasMany(McqOption, { foreignKey: 'question_id', as: 'mcqOptions' });
@@ -27,6 +33,9 @@ Question.hasMany(Comment, { foreignKey: 'question_id', as: 'comments' });
 Question.hasMany(UserAnswer, { foreignKey: 'question_id' });
 Question.hasMany(QuestionReport, { foreignKey: 'question_id', as: 'reports' });
 Question.hasMany(QuestionVote, { foreignKey: 'question_id', as: 'votes' });
+
+ProblemSet.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
+ProblemSet.hasMany(ProblemSetVote, { foreignKey: 'problemset_id', as: 'votes' });
 
 //many to many associations
 Question.belongsToMany(Tag, { 
@@ -40,6 +49,32 @@ Tag.belongsToMany(Question, {
   foreignKey: 'tag_id',
   otherKey: 'question_id',
   as: 'questions'
+});
+
+ProblemSet.belongsToMany(Question, { 
+  through: ProblemSetQuestion, 
+  foreignKey: 'problemset_id',
+  otherKey: 'question_id',
+  as: 'questions'
+});
+Question.belongsToMany(ProblemSet, { 
+  through: ProblemSetQuestion, 
+  foreignKey: 'question_id',
+  otherKey: 'problemset_id',
+  as: 'problemSets'
+});
+
+ProblemSet.belongsToMany(Tag, { 
+  through: ProblemSetTag, 
+  foreignKey: 'problemset_id',
+  otherKey: 'tag_id',
+  as: 'tags'
+});
+Tag.belongsToMany(ProblemSet, { 
+  through: ProblemSetTag, 
+  foreignKey: 'tag_id',
+  otherKey: 'problemset_id',
+  as: 'problemSets'
 });
 
 McqOption.belongsTo(Question, { foreignKey: 'question_id' });
@@ -64,6 +99,9 @@ CommentVote.belongsTo(Comment, { foreignKey: 'comment_id' });
 QuestionVote.belongsTo(User, { foreignKey: 'user_id' });
 QuestionVote.belongsTo(Question, { foreignKey: 'question_id' });
 
+ProblemSetVote.belongsTo(User, { foreignKey: 'user_id' });
+ProblemSetVote.belongsTo(ProblemSet, { foreignKey: 'problemset_id' });
+
 ReputationHistory.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 module.exports = {
@@ -78,5 +116,9 @@ module.exports = {
   QuestionReport,
   CommentVote,
   QuestionVote,
-  ReputationHistory
+  ReputationHistory,
+  ProblemSet,
+  ProblemSetQuestion,
+  ProblemSetVote,
+  ProblemSetTag
 };

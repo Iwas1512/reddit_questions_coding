@@ -13,6 +13,8 @@ const commentRoutes = require('./routes/commentRoutes');
 const questionVoteRoutes = require('./routes/questionVoteRoutes');
 const tagRoutes = require('./routes/tagRoutes');
 const reputationRoutes = require('./routes/reputationRoutes');
+const problemSetRoutes = require('./routes/problemSetRoutes');
+const problemSetVoteRoutes = require('./routes/problemSetVoteRoutes');
 
 // Middleware
 app.use(express.json());
@@ -61,6 +63,8 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/questions', questionVoteRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/reputation', reputationRoutes);
+app.use('/api/problemsets', problemSetRoutes);
+app.use('/api/problemsets', problemSetVoteRoutes);
 
 // Start server (MUST be at the end)
 app.listen(PORT, '0.0.0.0', () => {
