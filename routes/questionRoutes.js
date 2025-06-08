@@ -86,9 +86,19 @@ router.get('/', async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
     
-    const tagFilter = req.query.tag;
-    const verifiedOnly = req.query.verified === 'true';
-    const sortBy = req.query.sortBy || 'newest';
+    const { 
+      tag: tagFilter, 
+      tags, 
+      verified, 
+      sortBy = 'newest', 
+      search, 
+      author, 
+      author_id, 
+      id,
+      sort
+    } = req.query;
+    
+    const verifiedOnly = verified === 'true';
     
     let whereClause = {};
     let includeClause = [
@@ -105,12 +115,47 @@ router.get('/', async (req, res) => {
       }
     ];
 
+    // Handle verified filter
     if (verifiedOnly) {
       whereClause.is_verified = true;
     }
 
-    if (tagFilter) {
-      const tagNames = tagFilter.split(',').map(tag => tag.trim()).filter(tag => tag);
+    // Handle specific question ID search
+    if (id) {
+      whereClause.question_id = id;
+    }
+
+    // Handle author ID filter
+    if (author_id) {
+      whereClause.author_id = author_id;
+    }
+
+    // Handle author username search
+    if (author) {
+      includeClause[0].where = {
+        username: { [Op.iLike]: `%${author}%` }
+      };
+      includeClause[0].required = true;
+    }
+
+    // Handle general text search (title, question_text)
+    if (search) {
+      whereClause[Op.or] = [
+        { title: { [Op.iLike]: `%${search}%` } },
+        { question_text: { [Op.iLike]: `%${search}%` } }
+      ];
+    }
+
+    // Handle tag filtering - support both 'tag' and 'tags' parameters
+    const tagFilterValue = tagFilter || tags;
+    if (tagFilterValue) {
+      let tagNames;
+      if (Array.isArray(tagFilterValue)) {
+        tagNames = tagFilterValue;
+      } else {
+        tagNames = tagFilterValue.split(',').map(tag => tag.trim()).filter(tag => tag);
+      }
+      
       if (tagNames.length > 0) {
         includeClause[1].where = {
           tag_name: {
@@ -121,9 +166,10 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Determine order based on sortBy parameter
+    // Determine order based on sortBy or sort parameter
+    const sortParam = sortBy || sort || 'newest';
     let orderClause;
-    switch (sortBy) {
+    switch (sortParam) {
       case 'popular':
         // Sort by combination of upvotes and views (hot/popular)
         orderClause = [
