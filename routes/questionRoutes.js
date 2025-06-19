@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Question, User, McqOption, FillBlankAnswer, UserAnswer, Tag, sequelize } = require('../associations/associations.js');
+const { Question, User, McqOption, FillBlankAnswer, UserAnswer, Tag, Comment } = require('../associations/associations.js');
 const ReputationService = require('../services/reputationService');
 const { Op } = require('sequelize');
 
@@ -197,7 +197,12 @@ router.get('/', async (req, res) => {
       offset,
       order: orderClause,
       include: includeClause,
-      distinct: true
+      distinct: true,
+      attributes: {
+        include: [
+          [Question.sequelize.literal('(SELECT COUNT(*) FROM "comments" WHERE "comments".question_id = "Question".question_id)'), 'comment_count']
+        ]
+      }
     });
 
     res.json({
@@ -238,7 +243,12 @@ router.get('/:id', async (req, res) => {
           attributes: ['tag_id', 'tag_name', 'color_code'],
           through: { attributes: [] }
         }
-      ]
+      ],
+      attributes: {
+        include: [
+          [Question.sequelize.literal('(SELECT COUNT(*) FROM "comments" WHERE "comments".question_id = "Question".question_id)'), 'comment_count']
+        ]
+      }
     });
 
     if (!question) {
