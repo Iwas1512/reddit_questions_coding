@@ -375,31 +375,17 @@ const sampleQuestions = [
 // Each problem set should have a title, description, difficulty_level, questionIndices, and tagNames
 const sampleProblemSets = [
   {
-    title: "JavaScript Fundamentals",
-    description: "Essential JavaScript concepts including ES6 features, async programming, and modern syntax.",
-    difficulty_level: "easy",
-    questionIndices: [1, 2, 12, 14, 16, 18],
-    tagNames: ['javascript', 'frontend', 'es6']
-  },
-  {
-    title: "Python Basics",
-    description: "Core Python programming concepts covering syntax, functions, and basic data structures.",
-    difficulty_level: "easy",
-    questionIndices: [3, 5, 13, 15, 17, 19],
-    tagNames: ['python', 'backend', 'basics']
-  },
-  {
     title: "Advanced JavaScript",
     description: "Advanced JavaScript concepts including promises, event loop, and complex patterns.",
     difficulty_level: "hard",
-    questionIndices: [0, 2, 20],
+    questionIndices: [0, 2, 12, 14, 16, 18],
     tagNames: ['javascript', 'async', 'advanced']
   },
   {
     title: "Advanced Python",
     description: "Advanced Python features including decorators, generators, and context managers.",
     difficulty_level: "hard",
-    questionIndices: [3, 4, 5, 21],
+    questionIndices: [3, 4, 5, 13, 15, 17, 19],
     tagNames: ['python', 'decorators', 'advanced']
   },
   {
@@ -408,13 +394,6 @@ const sampleProblemSets = [
     difficulty_level: "medium",
     questionIndices: [6, 7],
     tagNames: ['algorithms', 'complexity', 'sorting']
-  },
-  {
-    title: "Data Structures",
-    description: "Essential data structures and their implementation principles.",
-    difficulty_level: "easy",
-    questionIndices: [8, 9],
-    tagNames: ['data structures', 'stack', 'queue']
   },
   {
     title: "Error Handling",

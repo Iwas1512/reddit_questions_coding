@@ -20,13 +20,13 @@ npm run generate-sample-data
 ```
 **What it does:**
 - Creates 22 sample questions (mix of MCQ and Fill-in-the-blank)
-- Creates 8 problem sets covering various topics and difficulty levels
+- Creates 5 problem sets covering various topics and difficulty levels
 - Associates questions with problem sets
 - Adds realistic metadata (upvotes, downvotes, view counts)
 
 **Generated Content:**
 - **Questions:** 22 questions covering JavaScript, Python, algorithms, data structures, and more
-- **Problem Sets:** 8 problem sets with different difficulty levels and topics
+- **Problem Sets:** 5 problem sets with different difficulty levels and topics
 - **Tags:** Comprehensive tagging system for easy filtering
 
 ## Quick Start
@@ -79,7 +79,7 @@ Created problem set: Python Basics
 
 === Sample Data Generation Complete ===
 Created 22 questions covering various topics and difficulty levels
-Created 8 problem sets with comprehensive coverage
+Created 5 problem sets with comprehensive coverage
 ```
 
 ## Manual Database Operations
