@@ -4,72 +4,44 @@ This directory contains scripts for managing sample data and database operations
 
 ## Available Scripts
 
-### 1. Generate Sample Data
+### 1. Clean Sample Data
+```bash
+npm run clean-sample-data
+```
+**What it does:**
+- Removes all existing sample questions and problem sets
+- Cleans up all related data (votes, comments, associations, etc.)
+- Prepares the database for fresh sample data generation
+- **Use this before generating new sample data to avoid duplicates**
+
+### 2. Generate Sample Data
 ```bash
 npm run generate-sample-data
 ```
 **What it does:**
-- Creates 4 sample questions (2 MCQ, 2 Fill-in-the-blank)
-- Creates 2 problem sets (JavaScript Fundamentals, Python Basics)
+- Creates 22 sample questions (mix of MCQ and Fill-in-the-blank)
+- Creates 8 problem sets covering various topics and difficulty levels
 - Associates questions with problem sets
 - Adds realistic metadata (upvotes, downvotes, view counts)
 
 **Generated Content:**
-- **Questions:**
-  1. JavaScript Array Methods (MCQ, Easy)
-  2. Python Function Definition (Fill-in-the-blank, Easy)
-  3. JavaScript Closures (MCQ, Medium)
-  4. Python List Comprehension (Fill-in-the-blank, Medium)
+- **Questions:** 22 questions covering JavaScript, Python, algorithms, data structures, and more
+- **Problem Sets:** 8 problem sets with different difficulty levels and topics
+- **Tags:** Comprehensive tagging system for easy filtering
 
-- **Problem Sets:**
-  1. JavaScript Fundamentals (2 questions)
-  2. Python Basics (2 questions)
+## Quick Start
 
-### 2. Check Problem Sets
+For a fresh start with new sample data:
+
 ```bash
-npm run check-problem-sets
-```
-**What it does:**
-- Lists all problem sets in the database
-- Shows which questions are associated with each problem set
-- Displays the junction table contents
-- Helps diagnose if associations are missing
+# Clean existing data first
+npm run clean-sample-data
 
-### 3. Add Questions to Problem Sets
-```bash
-npm run add-questions-to-problem-sets
+# Then generate new sample data
+npm run generate-sample-data
 ```
-**What it does:**
-- Takes existing questions and problem sets
-- Creates associations between them if none exist
-- Updates problem set question counts
-- Useful if the main generation script didn't create associations properly
 
 ## Troubleshooting
-
-### Problem Sets Have No Questions
-
-If your problem sets don't have questions attached, try these steps:
-
-1. **First, check what's in the database:**
-   ```bash
-   npm run check-problem-sets
-   ```
-
-2. **If no data exists, generate everything:**
-   ```bash
-   npm run generate-sample-data
-   ```
-
-3. **If problem sets exist but have no questions, add associations:**
-   ```bash
-   npm run add-questions-to-problem-sets
-   ```
-
-4. **Verify the fix:**
-   ```bash
-   npm run check-problem-sets
-   ```
 
 ### Common Issues
 
@@ -77,6 +49,7 @@ If your problem sets don't have questions attached, try these steps:
 2. **"No problem sets found"** - Run `generate-sample-data` first  
 3. **"Associations already exist"** - The data is already properly set up
 4. **Database connection errors** - Check your `.env` file and database connection
+5. **Duplicate questions"** - Run `clean-sample-data` first, then `generate-sample-data`
 
 ## Prerequisites
 
@@ -95,28 +68,18 @@ If your problem sets don't have questions attached, try these steps:
 
 After running `generate-sample-data`, you should see:
 ```
-Created question: JavaScript Array Methods
-Created question: Python Function Definition
-Created question: JavaScript Closures
-Created question: Python List Comprehension
+Created question: JavaScript Promise Methods
+Created question: JavaScript Destructuring Assignment
+Created question: JavaScript Event Loop
+... (and many more questions)
+
 Created problem set: JavaScript Fundamentals
 Created problem set: Python Basics
-Successfully associated questions with problem sets
+... (and more problem sets)
 
 === Sample Data Generation Complete ===
-Created 4 questions:
-- JavaScript Array Methods (mcq, easy)
-- Python Function Definition (fill_in_blank, easy)
-- JavaScript Closures (mcq, medium)
-- Python List Comprehension (fill_in_blank, medium)
-
-Created 2 problem sets:
-- JavaScript Fundamentals (2 questions, easy)
-- Python Basics (2 questions, easy)
-
-Question-Problem Set Associations:
-- JavaScript Fundamentals: JavaScript Array Methods, JavaScript Closures
-- Python Basics: Python Function Definition, Python List Comprehension
+Created 22 questions covering various topics and difficulty levels
+Created 8 problem sets with comprehensive coverage
 ```
 
 ## Manual Database Operations
