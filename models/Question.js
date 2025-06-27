@@ -73,6 +73,16 @@ const Question = sequelize.define('Question', {
   language: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  source: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Source of the question (e.g., "quizapi", "user_created")'
+  },
+  external_id: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'External ID from the source API'
   }
 }, {
   tableName: 'questions',
