@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const QuizApiService = require('../services/quizApiService');
-const { Question, User, McqOption, Tag, UserAnswer } = require('../associations/associations.js');
+const AICategorizationService = require('../services/aiCategorizationService');
+const { Question, User, McqOption, Tag, UserAnswer, ProblemSet, ProblemSetQuestion, ProblemSetTag } = require('../associations/associations.js');
 const ReputationService = require('../services/reputationService');
 const { Op } = require('sequelize');
 
@@ -203,38 +204,504 @@ router.get('/stats', requireAdmin, async (req, res) => {
     const totalImported = await Question.count({
       where: { source: 'quizapi' }
     });
-
-    const importedByCategory = await Question.findAll({
+    
+    const recentImports = await Question.findAll({
       where: { source: 'quizapi' },
-      include: [{
-        model: Tag,
-        as: 'tags',
-        attributes: ['tag_name']
-      }],
-      attributes: ['question_id', 'difficulty_level', 'created_at']
+      order: [['created_at', 'DESC']],
+      limit: 10,
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['username']
+        }
+      ]
     });
 
-    const stats = {
-      total_imported: totalImported,
-      by_difficulty: {
-        easy: importedByCategory.filter(q => q.difficulty_level === 'easy').length,
-        medium: importedByCategory.filter(q => q.difficulty_level === 'medium').length,
-        hard: importedByCategory.filter(q => q.difficulty_level === 'hard').length
-      },
-      by_month: {}
-    };
-
-    // Group by month
-    importedByCategory.forEach(question => {
-      const month = new Date(question.created_at).toISOString().slice(0, 7); // YYYY-MM
-      stats.by_month[month] = (stats.by_month[month] || 0) + 1;
+    res.json({
+      totalImported,
+      recentImports
     });
-
-    res.json(stats);
   } catch (error) {
     console.error('Error fetching import stats:', error);
     res.status(500).json({ error: 'Failed to fetch import statistics' });
   }
 });
+
+// AI-powered question categorization
+router.post('/categorize', requireAdmin, async (req, res) => {
+  try {
+    const { limit = 10, category, difficulty, tags, aiProvider = 'openai' } = req.body;
+    
+    // Fetch questions from QuizAPI
+    const quizApiQuestions = await QuizApiService.fetchQuestions({
+      limit: parseInt(limit),
+      category,
+      difficulty,
+      tags
+    });
+
+    // Convert to your app's format
+    const convertedQuestions = quizApiQuestions.map(q => 
+      QuizApiService.convertQuestionFormat(q, req.user.user_id)
+    );
+
+    // Use AI to categorize questions
+    const categorizedQuestions = await AICategorizationService.categorizeQuestionsWithAI(
+      convertedQuestions, 
+      aiProvider
+    );
+
+    res.json({
+      success: true,
+      categories: categorizedQuestions,
+      totalQuestions: convertedQuestions.length,
+      aiProvider
+    });
+
+  } catch (error) {
+    console.error('Error categorizing questions with AI:', error);
+    res.status(500).json({ 
+      error: 'Failed to categorize questions',
+      details: error.message 
+    });
+  }
+});
+
+// Import questions directly into a problem set with AI categorization
+router.post('/import-to-set', requireAdmin, async (req, res) => {
+  const transaction = await Question.sequelize.transaction();
+  
+  try {
+    const { 
+      limit = 10, 
+      category, 
+      difficulty, 
+      tags, 
+      autoVerify = false,
+      aiProvider = 'openai',
+      createMultipleSets = false // If true, creates separate sets for each category
+    } = req.body;
+    
+    const authorId = req.user.user_id;
+
+    // Fetch questions from QuizAPI
+    const quizApiQuestions = await QuizApiService.fetchQuestions({
+      limit: parseInt(limit),
+      category,
+      difficulty,
+      tags
+    });
+
+    // Convert to your app's format
+    const convertedQuestions = quizApiQuestions.map(q => 
+      QuizApiService.convertQuestionFormat(q, authorId)
+    );
+
+    let problemSets = [];
+
+    if (createMultipleSets) {
+      // Create separate problem sets for each AI-categorized group
+      const categorizedQuestions = await AICategorizationService.categorizeQuestionsWithAI(
+        convertedQuestions, 
+        aiProvider
+      );
+
+             for (const [categoryKey, categoryData] of Object.entries(categorizedQuestions)) {
+         const problemSet = await createProblemSetFromCategory(
+           categoryData, 
+           authorId, 
+           autoVerify, 
+           transaction
+         );
+         problemSets.push(problemSet);
+       }
+    } else {
+             // Create a single problem set with all questions
+       const problemSet = await createProblemSetFromQuestions(
+         convertedQuestions, 
+         authorId, 
+         autoVerify, 
+         aiProvider,
+         transaction
+       );
+      problemSets.push(problemSet);
+    }
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      problemSets,
+      totalQuestions: convertedQuestions.length,
+      message: `Successfully created ${problemSets.length} problem set(s) with ${convertedQuestions.length} questions`
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Error importing questions to problem set:', error);
+    res.status(500).json({ 
+      error: 'Failed to import questions to problem set',
+      details: error.message 
+    });
+  }
+});
+
+// Helper method to create problem set from AI-categorized questions
+async function createProblemSetFromCategory(categoryData, authorId, autoVerify, transaction) {
+  // Get AI suggestion for problem set details
+  const suggestion = await AICategorizationService.suggestProblemSetDetails(
+    categoryData.questions, 
+    'openai'
+  );
+
+  // Create the problem set
+  const problemSet = await ProblemSet.create({
+    title: suggestion.title || categoryData.title,
+    description: suggestion.description || categoryData.description,
+    difficulty_level: mapDifficultyToEnum(suggestion.difficulty || categoryData.difficulty),
+    author_id: authorId,
+    is_verified: autoVerify,
+    question_count: categoryData.questions.length
+  }, { transaction });
+
+  // Import questions and add to problem set
+  const importedQuestions = [];
+  for (const questionData of categoryData.questions) {
+    const question = await importQuestionToDatabase(questionData, authorId, autoVerify, transaction);
+    importedQuestions.push(question);
+  }
+
+  // Add questions to problem set
+  for (let i = 0; i < importedQuestions.length; i++) {
+    await ProblemSetQuestion.create({
+      problemset_id: problemSet.problemset_id,
+      question_id: importedQuestions[i].question_id,
+      question_order: i + 1
+    }, { transaction });
+  }
+
+  // Add suggested tags to problem set
+  const allTags = [...(suggestion.tags || []), ...(categoryData.suggestedTags || [])];
+  for (const tagName of allTags) {
+    let tag = await Tag.findOne({
+      where: { tag_name: { [Op.iLike]: tagName } },
+      transaction
+    });
+
+    if (!tag) {
+      tag = await Tag.create({
+        tag_name: tagName.toLowerCase(),
+        description: `Auto-generated from AI categorization`,
+        color_code: '#3B82F6'
+      }, { transaction });
+    }
+
+    await problemSet.addTag(tag, { transaction });
+  }
+
+  return {
+    problemset_id: problemSet.problemset_id,
+    title: problemSet.title,
+    description: problemSet.description,
+    question_count: importedQuestions.length,
+    questions: importedQuestions.map(q => ({
+      question_id: q.question_id,
+      title: q.title
+    }))
+  };
+}
+
+// Helper method to create a single problem set from all questions
+async function createProblemSetFromQuestions(questions, authorId, autoVerify, aiProvider, transaction) {
+  // Get AI suggestion for problem set details
+  const suggestion = await AICategorizationService.suggestProblemSetDetails(questions, aiProvider);
+
+  // Create the problem set
+  const problemSet = await ProblemSet.create({
+    title: suggestion.title || 'Imported Problem Set',
+    description: suggestion.description || 'Questions imported from QuizAPI',
+    difficulty_level: mapDifficultyToEnum(suggestion.difficulty || 'medium'),
+    author_id: authorId,
+    is_verified: autoVerify,
+    question_count: questions.length
+  }, { transaction });
+
+  // Import questions and add to problem set
+  const importedQuestions = [];
+  for (const questionData of questions) {
+    const question = await importQuestionToDatabase(questionData, authorId, autoVerify, transaction);
+    importedQuestions.push(question);
+  }
+
+  // Add questions to problem set
+  for (let i = 0; i < importedQuestions.length; i++) {
+    await ProblemSetQuestion.create({
+      problemset_id: problemSet.problemset_id,
+      question_id: importedQuestions[i].question_id,
+      question_order: i + 1
+    }, { transaction });
+  }
+
+  // Add suggested tags to problem set
+  for (const tagName of suggestion.tags || []) {
+    let tag = await Tag.findOne({
+      where: { tag_name: { [Op.iLike]: tagName } },
+      transaction
+    });
+
+    if (!tag) {
+      tag = await Tag.create({
+        tag_name: tagName.toLowerCase(),
+        description: `Auto-generated from AI suggestion`,
+        color_code: '#3B82F6'
+      }, { transaction });
+    }
+
+    await problemSet.addTag(tag, { transaction });
+  }
+
+  return {
+    problemset_id: problemSet.problemset_id,
+    title: problemSet.title,
+    description: problemSet.description,
+    question_count: importedQuestions.length,
+    questions: importedQuestions.map(q => ({
+      question_id: q.question_id,
+      title: q.title
+    }))
+  };
+}
+
+// Helper method to import a single question to database
+async function importQuestionToDatabase(questionData, authorId, autoVerify, transaction) {
+  // Check if question already exists
+  const existingQuestion = await Question.findOne({
+    where: { 
+      external_id: questionData.external_id,
+      source: 'quizapi'
+    },
+    transaction
+  });
+
+  if (existingQuestion) {
+    return existingQuestion;
+  }
+
+  // Create the question
+  const question = await Question.create({
+    ...questionData,
+    is_verified: autoVerify,
+    is_active: true
+  }, { transaction });
+
+  // Create MCQ options
+  if (questionData.mcqOptions && questionData.mcqOptions.length > 0) {
+    for (let i = 0; i < questionData.mcqOptions.length; i++) {
+      await McqOption.create({
+        question_id: question.question_id,
+        option_text: questionData.mcqOptions[i].option_text,
+        is_correct: questionData.mcqOptions[i].is_correct,
+        option_order: i + 1
+      }, { transaction });
+    }
+  }
+
+  // Handle tags
+  if (questionData.tags && questionData.tags.length > 0) {
+    for (const tagName of questionData.tags) {
+      let tag = await Tag.findOne({
+        where: { tag_name: { [Op.iLike]: tagName } },
+        transaction
+      });
+
+      if (!tag) {
+        tag = await Tag.create({
+          tag_name: tagName.toLowerCase(),
+          description: `Auto-generated from QuizAPI`,
+          color_code: '#3B82F6'
+        }, { transaction });
+      }
+
+      await question.addTag(tag, { transaction });
+    }
+  }
+
+  return question;
+}
+
+// Helper method to map difficulty to enum
+function mapDifficultyToEnum(difficulty) {
+  const difficultyMap = {
+    'beginner': 'easy',
+    'intermediate': 'medium',
+    'advanced': 'hard',
+    'easy': 'easy',
+    'medium': 'medium',
+    'hard': 'hard'
+  };
+  return difficultyMap[difficulty.toLowerCase()] || 'medium';
+}
+
+// AI Organize existing questions into problem sets
+router.post('/ai-organize', requireAdmin, async (req, res) => {
+  const transaction = await Question.sequelize.transaction();
+  
+  try {
+    const authorId = req.user.user_id;
+
+    console.log(`AI organizing ALL existing questions for admin ${req.user.username}`);
+
+    // Get ALL existing questions from database (no filters)
+    const existingQuestions = await Question.findAll({
+      where: {
+        is_active: true,
+        is_verified: true
+      },
+      include: [
+        {
+          model: Tag,
+          as: 'tags',
+          through: { attributes: [] }
+        },
+        {
+          model: McqOption,
+          as: 'mcqOptions'
+        }
+      ],
+      order: [['created_at', 'DESC']]
+      // No limit - get ALL questions
+    });
+
+    if (existingQuestions.length === 0) {
+      return res.status(400).json({
+        error: 'No questions found in the database'
+      });
+    }
+
+    console.log(`Found ${existingQuestions.length} questions to organize`);
+
+    // Convert questions to format expected by AI service
+    const questionsForAI = existingQuestions.map(q => ({
+      question_id: q.question_id,
+      title: q.title,
+      question_text: q.question_text,
+      difficulty_level: q.difficulty_level,
+      tags: q.tags.map(tag => tag.tag_name),
+      mcqOptions: q.mcqOptions.map(opt => ({
+        option_text: opt.option_text,
+        is_correct: opt.is_correct
+      }))
+    }));
+
+    // Use AI to categorize questions
+    const categories = await AICategorizationService.categorizeQuestions(questionsForAI);
+
+    // Create problem sets from categories
+    const problemSets = [];
+    let totalQuestions = 0;
+
+    for (const [categoryKey, categoryData] of Object.entries(categories)) {
+      if (categoryData.questions && categoryData.questions.length > 0) {
+        const problemSet = await createProblemSetFromExistingQuestions(
+          categoryData, 
+          authorId, 
+          true, // auto-verify
+          transaction
+        );
+        problemSets.push(problemSet);
+        totalQuestions += categoryData.questions.length;
+      }
+    }
+
+    await transaction.commit();
+
+    console.log(`AI organize completed: ${problemSets.length} problem sets, ${totalQuestions} questions`);
+
+    res.json({
+      success: true,
+      problemSets: problemSets,
+      totalQuestions: totalQuestions,
+      message: `Successfully organized ${totalQuestions} questions into ${problemSets.length} problem sets`
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Error organizing with AI:', error);
+    res.status(500).json({ 
+      error: 'Failed to organize questions with AI',
+      details: error.message 
+    });
+  }
+});
+
+// Check AI service availability
+router.get('/ai-status', requireAdmin, async (req, res) => {
+  try {
+    const status = AICategorizationService.checkAvailability();
+    res.json(status);
+  } catch (error) {
+    console.error('Error checking AI status:', error);
+    res.status(500).json({ error: 'Failed to check AI status' });
+  }
+});
+
+// Helper method to create problem set from existing questions
+async function createProblemSetFromExistingQuestions(categoryData, authorId, autoVerify, transaction) {
+  // Get AI suggestion for problem set details
+  const suggestion = await AICategorizationService.suggestProblemSetDetails(
+    categoryData.questions, 
+    'openai'
+  );
+
+  // Create the problem set
+  const problemSet = await ProblemSet.create({
+    title: suggestion.title || categoryData.title,
+    description: suggestion.description || categoryData.description,
+    difficulty_level: mapDifficultyToEnum(suggestion.difficulty || categoryData.difficulty),
+    author_id: authorId,
+    is_verified: autoVerify,
+    question_count: categoryData.questions.length
+  }, { transaction });
+
+  // Add existing questions to problem set (no need to re-import)
+  for (let i = 0; i < categoryData.questions.length; i++) {
+    await ProblemSetQuestion.create({
+      problemset_id: problemSet.problemset_id,
+      question_id: categoryData.questions[i].question_id,
+      question_order: i + 1
+    }, { transaction });
+  }
+
+  // Add suggested tags to problem set
+  const allTags = [...(suggestion.tags || []), ...(categoryData.suggestedTags || [])];
+  for (const tagName of allTags) {
+    let tag = await Tag.findOne({
+      where: { tag_name: { [Op.iLike]: tagName } },
+      transaction
+    });
+
+    if (!tag) {
+      tag = await Tag.create({
+        tag_name: tagName.toLowerCase(),
+        description: `Auto-generated from AI organization`,
+        color_code: '#3B82F6'
+      }, { transaction });
+    }
+
+    await problemSet.addTag(tag, { transaction });
+  }
+
+  return {
+    problemset_id: problemSet.problemset_id,
+    title: problemSet.title,
+    description: problemSet.description,
+    question_count: categoryData.questions.length,
+    questions: categoryData.questions.map(q => ({
+      question_id: q.question_id,
+      title: q.title
+    }))
+  };
+}
 
 module.exports = router; 

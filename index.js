@@ -4,6 +4,9 @@ const PORT = process.env.PORT || 5000;
 const sequelize = require('./db');
 const cors = require('cors');
 
+// Import associations to set up database relationships
+require('./associations/associations');
+
 // Import routes (MUST be at the top, before using them)
 const userRoutes = require('./routes/userRoutes');
 const questionRoutes = require('./routes/questionRoutes');
@@ -40,19 +43,42 @@ app.use(cors({
 // Database connection
 sequelize.authenticate()
   .then(() => {
-    console.log('Database connection established.');
-    return sequelize.sync();
+    console.log('Database connection established successfully.');
+    return sequelize.sync({ alter: true }); // Use alter: true for production safety
   })
   .then(() => {
-    console.log('Models synchronized with database.');
+    console.log('Database models synchronized successfully.');
   })
   .catch(err => {
-    console.error('Unable to connect to the database:', err);
+    console.error('Database connection failed:', err.message);
+    console.error('Database error details:', {
+      code: err.code,
+      errno: err.errno,
+      syscall: err.syscall,
+      hostname: err.hostname,
+      port: err.port
+    });
+    // Don't exit the process, let it continue and Railway will handle restarts
   });
 
 // Basic route
 app.get('/', (req, res) => {
-  res.send('Reddit Questions API is running');
+  res.json({
+    message: 'Reddit Questions API is running',
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // API Routes (MUST be before server starts)
