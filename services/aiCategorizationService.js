@@ -3,14 +3,12 @@ const axios = require('axios');
 class AICategorizationService {
   constructor() {
     this.openaiApiKey = process.env.OPENAI_API_KEY;
-    this.claudeApiKey = process.env.CLAUDE_API_KEY;
-    this.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
   }
 
   /**
-   * Categorize questions using AI (OpenAI or Claude)
+   * Categorize questions using AI (OpenAI)
    * @param {Array} questions - Array of questions to categorize
-   * @param {string} provider - 'openai' or 'claude'
+   * @param {string} provider - 'openai'
    * @returns {Promise<Object>} Categorized questions grouped by sets
    */
   async categorizeQuestions(questions, provider = 'openai') {
@@ -18,18 +16,16 @@ class AICategorizationService {
   }
 
   /**
-   * Categorize questions using AI (OpenAI or Claude)
+   * Categorize questions using AI (OpenAI)
    * @param {Array} questions - Array of questions to categorize
-   * @param {string} provider - 'openai' or 'claude'
+   * @param {string} provider - 'openai'
    * @returns {Promise<Object>} Categorized questions grouped by sets
    */
   async categorizeQuestionsWithAI(questions, provider = 'openai') {
     if (provider === 'openai') {
       return this.categorizeWithOpenAI(questions);
-    } else if (provider === 'claude') {
-      return this.categorizeWithClaude(questions);
     } else {
-      throw new Error('Unsupported AI provider. Use "openai" or "claude"');
+      throw new Error('Unsupported AI provider. Use "openai"');
     }
   }
 
@@ -47,7 +43,7 @@ class AICategorizationService {
     
     try {
       const requestPayload = {
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -65,7 +61,8 @@ class AICategorizationService {
         headers: {
           'Authorization': `Bearer ${this.openaiApiKey}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 60000 // 60 seconds
       });
       const result = response.data.choices[0].message.content;
       return this.parseAICategorizationResult(result, questions);
@@ -80,44 +77,6 @@ class AICategorizationService {
         console.error('OpenAI API error:', error.message);
       }
       throw new Error(`OpenAI categorization failed: ${error.message}`);
-    }
-  }
-
-  /**
-   * Categorize questions using Claude API
-   * @param {Array} questions - Array of questions to categorize
-   * @returns {Promise<Object>} Categorized questions grouped by sets
-   */
-  async categorizeWithClaude(questions) {
-    if (!this.anthropicApiKey) {
-      throw new Error('Anthropic API key is not configured');
-    }
-
-    const prompt = this.buildCategorizationPrompt(questions);
-    
-    try {
-      const response = await axios.post('https://api.anthropic.com/v1/messages', {
-        model: 'claude-3-sonnet-20240229',
-        max_tokens: 2000,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
-      }, {
-        headers: {
-          'x-api-key': this.anthropicApiKey,
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01'
-        }
-      });
-
-      const result = response.data.content[0].text;
-      return this.parseAICategorizationResult(result, questions);
-    } catch (error) {
-      console.error('Claude API error:', error.response?.data || error.message);
-      throw new Error(`Claude categorization failed: ${error.message}`);
     }
   }
 
@@ -209,7 +168,7 @@ Focus on creating meaningful, focused problem sets that would help someone learn
   /**
    * Suggest problem set name and description for a group of questions
    * @param {Array} questions - Array of questions
-   * @param {string} provider - 'openai' or 'claude'
+   * @param {string} provider - 'openai'
    * @returns {Promise<Object>} Suggested title and description
    */
   async suggestProblemSetDetails(questions, provider = 'openai') {
@@ -229,8 +188,6 @@ Respond in JSON format:
 
     if (provider === 'openai') {
       return this.getOpenAISuggestion(prompt);
-    } else if (provider === 'claude') {
-      return this.getClaudeSuggestion(prompt);
     }
   }
 
@@ -276,51 +233,13 @@ Respond in JSON format:
   }
 
   /**
-   * Get suggestion from Claude
-   * @param {string} prompt - The prompt
-   * @returns {Promise<Object>} Suggestion
-   */
-  async getClaudeSuggestion(prompt) {
-    if (!this.anthropicApiKey) {
-      throw new Error('Anthropic API key is not configured');
-    }
-
-    try {
-      const response = await axios.post('https://api.anthropic.com/v1/messages', {
-        model: 'claude-3-sonnet-20240229',
-        max_tokens: 500,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
-      }, {
-        headers: {
-          'x-api-key': this.anthropicApiKey,
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01'
-        }
-      });
-
-      const result = response.data.content[0].text;
-      const jsonMatch = result.match(/\{[\s\S]*\}/);
-      return jsonMatch ? JSON.parse(jsonMatch[0]) : { title: 'Untitled Set', description: 'No description available' };
-    } catch (error) {
-      console.error('Claude suggestion error:', error);
-      return { title: 'Untitled Set', description: 'Error generating suggestion' };
-    }
-  }
-
-  /**
    * Check if AI services are available
    * @returns {Object} Availability status
    */
   checkAvailability() {
     return {
       openai: !!this.openaiApiKey,
-      claude: !!this.anthropicApiKey,
-      available: !!(this.openaiApiKey || this.anthropicApiKey)
+      available: !!this.openaiApiKey
     };
   }
 }
