@@ -7,7 +7,8 @@
     "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "generate-sample-data": "node scripts/generateSampleData.js",
-    "clean-sample-data": "node scripts/cleanSampleData.js"
+    "clean-sample-data": "node scripts/cleanSampleData.js",
+    "dev": "node index.js"
   },
   "repository": {
     "type": "git",
