@@ -46,8 +46,8 @@ class AICategorizationService {
     const prompt = this.buildCategorizationPrompt(questions);
     
     try {
-      const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: 'gpt-3.5-turbo',
+      const requestPayload = {
+        model: 'gpt-4',
         messages: [
           {
             role: 'system',
@@ -60,17 +60,26 @@ class AICategorizationService {
         ],
         temperature: 0.3,
         max_tokens: 2000
-      }, {
+      };
+      console.log('Sending request to OpenAI:', JSON.stringify(requestPayload, null, 2));
+      const response = await axios.post('https://api.openai.com/v1/chat/completions', requestPayload, {
         headers: {
           'Authorization': `Bearer ${this.openaiApiKey}`,
           'Content-Type': 'application/json'
         }
       });
-
       const result = response.data.choices[0].message.content;
       return this.parseAICategorizationResult(result, questions);
     } catch (error) {
-      console.error('OpenAI API error:', error.response?.data || error.message);
+      if (error.response) {
+        console.error('OpenAI API error response:', {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers
+        });
+      } else {
+        console.error('OpenAI API error:', error.message);
+      }
       throw new Error(`OpenAI categorization failed: ${error.message}`);
     }
   }
